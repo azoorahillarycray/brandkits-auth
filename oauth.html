@@ -2,6 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Signing you in…</title>
   <style>
     body {
@@ -15,6 +17,9 @@
       background: #0D0D0D;
       color: #FFFFFF;
       font-size: 14px;
+      text-align: center;
+      padding: 0 24px;
+      box-sizing: border-box;
     }
     .btn {
       margin-top: 16px;
@@ -37,10 +42,6 @@
       const SUPABASE_ANON_KEY = "sb_publishable_EyLVDO_GFLbQIkzyd7_25w_XBy3glLD"
       const PROXY_API_URL = `${SUPABASE_URL}/functions/v1/api-proxy`
 
-      // Grab both the query string and the hash. Supabase returns
-      // tokens in the hash (#access_token=...) but the `state`
-      // param (our nonce) can land in either place depending on
-      // the provider flow, so check both.
       const query = new URLSearchParams(window.location.search)
       const hash = new URLSearchParams(window.location.hash.substring(1))
 
@@ -50,9 +51,6 @@
       const error_description =
         hash.get("error_description") || query.get("error_description")
 
-      // Supabase passes `state` through verbatim if we set it on
-      // the /authorize URL — but we actually pass the nonce via the
-      // `redirect_to` query string, so check both spots.
       const nonce =
         query.get("nonce") ||
         hash.get("nonce") ||
@@ -60,61 +58,86 @@
         hash.get("state") ||
         ""
 
+      // Tokens are in memory now; scrub them from the address bar and
+      // history so they can't be recovered from there.
+      try {
+        history.replaceState(null, "", window.location.pathname)
+      } catch (e) {}
+
       const status = document.getElementById("status")
       const closeBtn = document.getElementById("close-btn")
 
+      function showClose() {
+        closeBtn.style.display = "block"
+      }
+
+      function closeSoon(ms) {
+        setTimeout(() => {
+          try { window.close() } catch (e) {}
+          showClose()
+        }, ms)
+      }
+
+      // Returns true only if the server accepted it. Retries network
+      // blips and 5xx; gives up immediately on 4xx.
       async function store(payload) {
-        try {
-          await fetch(PROXY_API_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({
-              action: "store-oauth-session",
-              payload: { nonce, ...payload },
-            }),
-          })
-        } catch (e) {
-          // Best effort.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await fetch(PROXY_API_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                action: "store-oauth-session",
+                payload: { nonce, ...payload },
+              }),
+            })
+            if (res.ok) return true
+            if (res.status >= 400 && res.status < 500) return false
+          } catch (e) {}
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
         }
+        return false
       }
 
       async function run() {
         if (!nonce) {
-          status.textContent = "Missing session id. Close and try again."
-          closeBtn.style.display = "block"
+          status.textContent = "Missing session id. Close this window and try again."
+          showClose()
           return
         }
 
         if (error) {
-          await store({ access_token: "ERROR", error: error_description || error })
-          status.textContent = "Sign-in failed: " + (error_description || error)
-          setTimeout(() => {
-            try { window.close() } catch (e) {}
-            closeBtn.style.display = "block"
-          }, 600)
+          const message = error_description || error
+          await store({ error: message })
+          status.textContent = "Sign-in failed: " + message
+          closeSoon(1500)
           return
         }
 
         if (!access_token) {
           status.textContent = "No token received. You can close this window."
-          closeBtn.style.display = "block"
+          showClose()
           return
         }
 
-        await store({
+        const ok = await store({
           access_token,
           refresh_token: refresh_token || "",
         })
 
-        status.textContent = "Signed in. Closing…"
-        setTimeout(() => {
-          try { window.close() } catch (e) {}
-          closeBtn.style.display = "block"
-        }, 400)
+        if (!ok) {
+          status.textContent =
+            "We couldn't hand your sign-in back to the plugin. Close this window and try again."
+          showClose()
+          return
+        }
+
+        status.textContent = "You're signed in. You can close this window."
+        closeSoon(400)
       }
 
       run()
