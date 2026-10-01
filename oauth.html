@@ -45,12 +45,32 @@
       const status = document.getElementById("status")
       const closeBtn = document.getElementById("close-btn")
 
+      // The plugin listens on this BroadcastChannel. Works even when
+      // window.opener is null (Framer plugin iframe sandbox).
+      let channel = null
+      try {
+        channel = new BroadcastChannel("brandkits_oauth")
+      } catch (e) {
+        // BroadcastChannel unsupported — fall back to postMessage below.
+      }
+
+      function send(payload) {
+        if (channel) {
+          try { channel.postMessage(payload) } catch (e) {}
+        }
+        // Best-effort fallback in case opener survived.
+        if (window.opener) {
+          try { window.opener.postMessage(payload, "*") } catch (e) {}
+        }
+      }
+
       if (error) {
         status.textContent = "Sign-in failed: " + (error_description || error)
-        if (window.opener) {
-          window.opener.postMessage({ type: "supabase-oauth-error", error: error_description || error }, "*")
-        }
-        closeBtn.style.display = "block"
+        send({ type: "supabase-oauth-error", error: error_description || error })
+        setTimeout(() => {
+          try { window.close() } catch (e) {}
+          closeBtn.style.display = "block"
+        }, 800)
         return
       }
 
@@ -69,34 +89,27 @@
         },
       }
 
-      // Listen for acknowledgement from Framer plugin iframe
-      window.addEventListener("message", (event) => {
-        if (event.data?.type === "supabase-oauth-ack") {
-          status.textContent = "Signed in! Redirecting…"
-          setTimeout(() => {
-            try { window.close() } catch (e) {}
-            closeBtn.style.display = "block"
-          }, 100)
-        }
-      })
+      // Fire it now, then repeat a few times in case the plugin
+      // hasn't attached its listener yet (race on very fast popups).
+      send(payload)
 
-      // Send payload to window.opener every 200ms until acknowledged or closed
+      let ticks = 0
       const interval = setInterval(() => {
-        if (window.opener) {
-          window.opener.postMessage(payload, "*")
-        } else {
+        ticks++
+        send(payload)
+        if (ticks >= 10) {
           clearInterval(interval)
-          status.textContent = "Sign-in complete. You can close this tab."
+          status.textContent = "Signed in. You can close this tab."
           closeBtn.style.display = "block"
         }
       }, 200)
 
-      // Fallback close after 5s
+      // Try to auto-close after a short delay.
       setTimeout(() => {
         clearInterval(interval)
         try { window.close() } catch (e) {}
         closeBtn.style.display = "block"
-      }, 5000)
+      }, 2500)
     })()
   </script>
 </body>
