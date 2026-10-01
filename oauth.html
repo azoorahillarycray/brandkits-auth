@@ -33,83 +33,91 @@
 
   <script>
     (function () {
-      const hash = window.location.hash.substring(1)
-      const params = new URLSearchParams(hash)
+      const SUPABASE_URL = "https://bxrqzfwddzlnfompmtwo.supabase.co"
+      const SUPABASE_ANON_KEY = "sb_publishable_EyLVDO_GFLbQIkzyd7_25w_XBy3glLD"
+      const PROXY_API_URL = `${SUPABASE_URL}/functions/v1/api-proxy`
 
-      const access_token = params.get("access_token")
-      const refresh_token = params.get("refresh_token")
-      const expires_in = params.get("expires_in")
-      const error = params.get("error")
-      const error_description = params.get("error_description")
+      // Grab both the query string and the hash. Supabase returns
+      // tokens in the hash (#access_token=...) but the `state`
+      // param (our nonce) can land in either place depending on
+      // the provider flow, so check both.
+      const query = new URLSearchParams(window.location.search)
+      const hash = new URLSearchParams(window.location.hash.substring(1))
+
+      const access_token = hash.get("access_token")
+      const refresh_token = hash.get("refresh_token")
+      const error = hash.get("error") || query.get("error")
+      const error_description =
+        hash.get("error_description") || query.get("error_description")
+
+      // Supabase passes `state` through verbatim if we set it on
+      // the /authorize URL — but we actually pass the nonce via the
+      // `redirect_to` query string, so check both spots.
+      const nonce =
+        query.get("nonce") ||
+        hash.get("nonce") ||
+        query.get("state") ||
+        hash.get("state") ||
+        ""
 
       const status = document.getElementById("status")
       const closeBtn = document.getElementById("close-btn")
 
-      // The plugin listens on this BroadcastChannel. Works even when
-      // window.opener is null (Framer plugin iframe sandbox).
-      let channel = null
-      try {
-        channel = new BroadcastChannel("brandkits_oauth")
-      } catch (e) {
-        // BroadcastChannel unsupported — fall back to postMessage below.
+      async function store(payload) {
+        try {
+          await fetch(PROXY_API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              action: "store-oauth-session",
+              payload: { nonce, ...payload },
+            }),
+          })
+        } catch (e) {
+          // Best effort.
+        }
       }
 
-      function send(payload) {
-        if (channel) {
-          try { channel.postMessage(payload) } catch (e) {}
+      async function run() {
+        if (!nonce) {
+          status.textContent = "Missing session id. Close and try again."
+          closeBtn.style.display = "block"
+          return
         }
-        // Best-effort fallback in case opener survived.
-        if (window.opener) {
-          try { window.opener.postMessage(payload, "*") } catch (e) {}
-        }
-      }
 
-      if (error) {
-        status.textContent = "Sign-in failed: " + (error_description || error)
-        send({ type: "supabase-oauth-error", error: error_description || error })
+        if (error) {
+          await store({ access_token: "ERROR", error: error_description || error })
+          status.textContent = "Sign-in failed: " + (error_description || error)
+          setTimeout(() => {
+            try { window.close() } catch (e) {}
+            closeBtn.style.display = "block"
+          }, 600)
+          return
+        }
+
+        if (!access_token) {
+          status.textContent = "No token received. You can close this window."
+          closeBtn.style.display = "block"
+          return
+        }
+
+        await store({
+          access_token,
+          refresh_token: refresh_token || "",
+        })
+
+        status.textContent = "Signed in. Closing…"
         setTimeout(() => {
           try { window.close() } catch (e) {}
           closeBtn.style.display = "block"
-        }, 800)
-        return
+        }, 400)
       }
 
-      if (!access_token) {
-        status.textContent = "No token received. You can close this window."
-        closeBtn.style.display = "block"
-        return
-      }
-
-      const payload = {
-        type: "supabase-oauth-success",
-        session: {
-          access_token,
-          refresh_token: refresh_token || "",
-          expires_in: expires_in ? parseInt(expires_in, 10) : null,
-        },
-      }
-
-      // Fire it now, then repeat a few times in case the plugin
-      // hasn't attached its listener yet (race on very fast popups).
-      send(payload)
-
-      let ticks = 0
-      const interval = setInterval(() => {
-        ticks++
-        send(payload)
-        if (ticks >= 10) {
-          clearInterval(interval)
-          status.textContent = "Signed in. You can close this tab."
-          closeBtn.style.display = "block"
-        }
-      }, 200)
-
-      // Try to auto-close after a short delay.
-      setTimeout(() => {
-        clearInterval(interval)
-        try { window.close() } catch (e) {}
-        closeBtn.style.display = "block"
-      }, 2500)
+      run()
     })()
   </script>
 </body>
