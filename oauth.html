@@ -32,16 +32,35 @@
 
       const status = document.getElementById("status")
 
+      // Open a channel that the plugin is listening on. This works
+      // even when window.opener is null (which happens inside the
+      // Framer plugin iframe sandbox).
+      let channel = null
+      try {
+        channel = new BroadcastChannel("brandkits_oauth")
+      } catch (e) {
+        // BroadcastChannel not supported — fall back to postMessage.
+      }
+
+      function send(payload) {
+        // Preferred path: BroadcastChannel.
+        if (channel) {
+          try {
+            channel.postMessage(payload)
+          } catch (e) {}
+        }
+        // Fallback: postMessage, in case opener survived.
+        if (window.opener) {
+          try {
+            window.opener.postMessage(payload, "*")
+          } catch (e) {}
+        }
+      }
+
       if (error) {
         status.textContent = "Sign-in failed: " + (error_description || error)
-        // Post the error back to the opener, then close.
-        if (window.opener) {
-          window.opener.postMessage(
-            { type: "supabase-oauth-error", error: error_description || error },
-            "*"
-          )
-          setTimeout(() => window.close(), 800)
-        }
+        send({ type: "supabase-oauth-error", error: error_description || error })
+        setTimeout(() => window.close(), 800)
         return
       }
 
@@ -50,23 +69,18 @@
         return
       }
 
-      // Post the session back to the plugin iframe.
-      if (window.opener) {
-        window.opener.postMessage(
-          {
-            type: "supabase-oauth-success",
-            session: {
-              access_token,
-              refresh_token,
-              expires_in: expires_in ? parseInt(expires_in, 10) : null,
-            },
-          },
-          "*"
-        )
-        setTimeout(() => window.close(), 400)
-      } else {
-        status.textContent = "Opened outside the plugin. You can close this."
-      }
+      send({
+        type: "supabase-oauth-success",
+        session: {
+          access_token,
+          refresh_token,
+          expires_in: expires_in ? parseInt(expires_in, 10) : null,
+        },
+      })
+
+      // Small delay so the message has time to flush before the
+      // window closes.
+      setTimeout(() => window.close(), 400)
     })()
   </script>
 </body>
