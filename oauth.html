@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Signing you in…</title>
+  <style>
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #0D0D0D;
+      color: #FFFFFF;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Completing sign-in…</div>
+  <script>
+    (function () {
+      const hash = window.location.hash.substring(1)
+      const params = new URLSearchParams(hash)
+
+      const access_token = params.get("access_token")
+      const refresh_token = params.get("refresh_token")
+      const expires_in = params.get("expires_in")
+      const error = params.get("error")
+      const error_description = params.get("error_description")
+
+      const status = document.getElementById("status")
+
+      if (error) {
+        status.textContent = "Sign-in failed: " + (error_description || error)
+        // Post the error back to the opener, then close.
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: "supabase-oauth-error", error: error_description || error },
+            "*"
+          )
+          setTimeout(() => window.close(), 800)
+        }
+        return
+      }
+
+      if (!access_token) {
+        status.textContent = "No token received. You can close this window."
+        return
+      }
+
+      // Post the session back to the plugin iframe.
+      if (window.opener) {
+        window.opener.postMessage(
+          {
+            type: "supabase-oauth-success",
+            session: {
+              access_token,
+              refresh_token,
+              expires_in: expires_in ? parseInt(expires_in, 10) : null,
+            },
+          },
+          "*"
+        )
+        setTimeout(() => window.close(), 400)
+      } else {
+        status.textContent = "Opened outside the plugin. You can close this."
+      }
+    })()
+  </script>
+</body>
+</html>
