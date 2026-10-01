@@ -45,25 +45,11 @@
       const status = document.getElementById("status")
       const closeBtn = document.getElementById("close-btn")
 
-      let channel = null
-      try {
-        channel = new BroadcastChannel("brandkits_oauth")
-      } catch (e) {}
-
-      function sendPayload(payload) {
-        // 1. BroadcastChannel (Same origin)
-        if (channel) {
-          try { channel.postMessage(payload) } catch (e) {}
-        }
-        // 2. Window Opener (Cross-origin popup -> iframe)
-        if (window.opener) {
-          try { window.opener.postMessage(payload, "*") } catch (e) {}
-        }
-      }
-
       if (error) {
         status.textContent = "Sign-in failed: " + (error_description || error)
-        sendPayload({ type: "supabase-oauth-error", error: error_description || error })
+        if (window.opener) {
+          window.opener.postMessage({ type: "supabase-oauth-error", error: error_description || error }, "*")
+        }
         closeBtn.style.display = "block"
         return
       }
@@ -83,47 +69,34 @@
         },
       }
 
-      // 3. Fallback: Save directly to localStorage for cross-tab polling
-      try {
-        localStorage.setItem("brandkits_oauth_session", JSON.stringify(payload.session))
-      } catch (e) {}
-
-      // Continuously broadcast until closed or ACK received
-      const interval = setInterval(() => {
-        sendPayload(payload)
-      }, 300)
-
-      // Listen for confirmation from Framer plugin
+      // Listen for acknowledgement from Framer plugin iframe
       window.addEventListener("message", (event) => {
         if (event.data?.type === "supabase-oauth-ack") {
-          clearInterval(interval)
-          status.textContent = "Signed in successfully!"
+          status.textContent = "Signed in! Redirecting…"
           setTimeout(() => {
             try { window.close() } catch (e) {}
             closeBtn.style.display = "block"
-          }, 200)
+          }, 100)
         }
       })
 
-      if (channel) {
-        channel.onmessage = (event) => {
-          if (event.data?.type === "supabase-oauth-ack") {
-            clearInterval(interval)
-            status.textContent = "Signed in successfully!"
-            setTimeout(() => {
-              try { window.close() } catch (e) {}
-              closeBtn.style.display = "block"
-            }, 200)
-          }
+      // Send payload to window.opener every 200ms until acknowledged or closed
+      const interval = setInterval(() => {
+        if (window.opener) {
+          window.opener.postMessage(payload, "*")
+        } else {
+          clearInterval(interval)
+          status.textContent = "Sign-in complete. You can close this tab."
+          closeBtn.style.display = "block"
         }
-      }
+      }, 200)
 
-      // Force close attempt after 3s if no ACK
+      // Fallback close after 5s
       setTimeout(() => {
         clearInterval(interval)
         try { window.close() } catch (e) {}
         closeBtn.style.display = "block"
-      }, 3000)
+      }, 5000)
     })()
   </script>
 </body>
