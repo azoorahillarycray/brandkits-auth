@@ -7,6 +7,7 @@
     body {
       font-family: -apple-system, system-ui, sans-serif;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
@@ -15,10 +16,21 @@
       color: #FFFFFF;
       font-size: 14px;
     }
+    .btn {
+      margin-top: 16px;
+      padding: 8px 16px;
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 6px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="status">Completing sign-in…</div>
+  <button id="close-btn" class="btn" style="display: none;" onclick="window.close()">Close Window</button>
+
   <script>
     (function () {
       const hash = window.location.hash.substring(1)
@@ -31,44 +43,50 @@
       const error_description = params.get("error_description")
 
       const status = document.getElementById("status")
+      const closeBtn = document.getElementById("close-btn")
 
-      // Open a channel that the plugin is listening on. This works
-      // even when window.opener is null (which happens inside the
-      // Framer plugin iframe sandbox).
       let channel = null
       try {
         channel = new BroadcastChannel("brandkits_oauth")
-      } catch (e) {
-        // BroadcastChannel not supported — fall back to postMessage.
-      }
+      } catch (e) {}
 
       function send(payload) {
-        // Preferred path: BroadcastChannel.
         if (channel) {
-          try {
-            channel.postMessage(payload)
-          } catch (e) {}
+          try { channel.postMessage(payload) } catch (e) {}
         }
-        // Fallback: postMessage, in case opener survived.
         if (window.opener) {
-          try {
-            window.opener.postMessage(payload, "*")
-          } catch (e) {}
+          try { window.opener.postMessage(payload, "*") } catch (e) {}
+        }
+      }
+
+      // Listen for confirmation from the Framer plugin
+      if (channel) {
+        channel.onmessage = (event) => {
+          if (event.data?.type === "supabase-oauth-ack") {
+            status.textContent = "Signed in successfully!"
+            setTimeout(() => {
+              window.close()
+              // Fallback if window.close() is blocked by browser
+              closeBtn.style.display = "block"
+            }, 300)
+          }
         }
       }
 
       if (error) {
         status.textContent = "Sign-in failed: " + (error_description || error)
         send({ type: "supabase-oauth-error", error: error_description || error })
-        setTimeout(() => window.close(), 800)
+        closeBtn.style.display = "block"
         return
       }
 
       if (!access_token) {
         status.textContent = "No token received. You can close this window."
+        closeBtn.style.display = "block"
         return
       }
 
+      // Send token payload
       send({
         type: "supabase-oauth-success",
         session: {
@@ -78,9 +96,12 @@
         },
       })
 
-      // Small delay so the message has time to flush before the
-      // window closes.
-      setTimeout(() => window.close(), 400)
+      // Fallback timeout in case channel ACK isn't received
+      setTimeout(() => {
+        status.textContent = "Sign-in complete. You can close this tab."
+        closeBtn.style.display = "block"
+        try { window.close() } catch (e) {}
+      }, 2500)
     })()
   </script>
 </body>
