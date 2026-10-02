@@ -4,39 +4,208 @@
   <meta charset="utf-8" />
   <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/png" href="/brandkits-auth/favicon.png" />
-<link rel="apple-touch-icon" href="/brandkits-auth/favicon.png" />
-  <title>Signing you in…</title>
+  <title>Brand Kits — Sign In</title>
+
+  <!-- Favicon. Replace favicon.svg with your own or use a .png. -->
+  <link rel="icon" type="image/svg+xml" href="/brandkits-auth/favicon.svg" />
+  <link rel="apple-touch-icon" href="/brandkits-auth/favicon.png" />
+
   <style>
+    :root {
+      --bg: #0D0D0D;
+      --surface: #161616;
+      --text: #FFFFFF;
+      --text-muted: #888888;
+      --text-dim: #555555;
+      --accent: #13e436;
+      --danger: #ff5a5a;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
     body {
-      font-family: -apple-system, system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 380px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background: #0D0D0D;
-      color: #FFFFFF;
-      font-size: 14px;
       text-align: center;
-      padding: 0 24px;
-      box-sizing: border-box;
+      gap: 20px;
     }
+
+    .logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .logo-fallback {
+      width: 24px;
+      height: 24px;
+      fill: #111111;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin: 0;
+      max-width: 300px;
+    }
+
+    .subtitle strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-top: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Success / error icon */
+    .status-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 8px;
+      animation: pop 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .status-icon.success {
+      background: var(--accent);
+    }
+
+    .status-icon.error {
+      background: var(--danger);
+    }
+
+    .status-icon svg {
+      width: 26px;
+      height: 26px;
+      display: block;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Close button */
     .btn {
-      margin-top: 16px;
-      padding: 8px 16px;
-      background: #222;
-      color: #fff;
-      border: 1px solid #444;
-      border-radius: 6px;
+      margin-top: 4px;
+      padding: 11px 22px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
       cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+      display: none;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn.show {
+      display: inline-block;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.02em;
     }
   </style>
 </head>
 <body>
-  <div id="status">Completing sign-in…</div>
-  <button id="close-btn" class="btn" style="display: none;" onclick="window.close()">Close Window</button>
+  <div class="card">
+    <div class="logo">
+      <img
+        src="https://azoorahillarycray.github.io/brandkits-auth/icon.svg"
+        alt=""
+        onerror="this.style.display='none'; this.parentNode.innerHTML='<svg class=&quot;logo-fallback&quot; viewBox=&quot;0 0 24 24&quot;><path d=&quot;M20 0v8h-8L4 0ZM4 8h8l8 8h-8v8l-8-8Z&quot;/></svg>';"
+      />
+    </div>
+
+    <h1 class="title" id="title">Signing you in…</h1>
+    <p class="subtitle" id="subtitle">Just a moment while we connect your account.</p>
+
+    <div class="spinner" id="spinner"></div>
+
+    <button class="btn" id="close-btn" onclick="window.close()">Close window</button>
+  </div>
+
+  <div class="footer">Brand Kits</div>
 
   <script>
     (function () {
@@ -60,17 +229,17 @@
         hash.get("state") ||
         ""
 
-      // Tokens are in memory now; scrub them from the address bar and
-      // history so they can't be recovered from there.
       try {
         history.replaceState(null, "", window.location.pathname)
       } catch (e) {}
 
-      const status = document.getElementById("status")
+      const titleEl = document.getElementById("title")
+      const subtitleEl = document.getElementById("subtitle")
+      const spinnerEl = document.getElementById("spinner")
       const closeBtn = document.getElementById("close-btn")
 
       function showClose() {
-        closeBtn.style.display = "block"
+        closeBtn.classList.add("show")
       }
 
       function closeSoon(ms) {
@@ -80,8 +249,18 @@
         }, ms)
       }
 
-      // Returns true only if the server accepted it. Retries network
-      // blips and 5xx; gives up immediately on 4xx.
+      function setSuccess(message) {
+        spinnerEl.style.display = "none"
+        titleEl.textContent = "You're signed in"
+        subtitleEl.textContent = message || "You can close this window and return to the plugin."
+      }
+
+      function setError(message) {
+        spinnerEl.style.display = "none"
+        titleEl.textContent = "Sign-in failed"
+        subtitleEl.innerHTML = message
+      }
+
       async function store(payload) {
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
@@ -107,7 +286,7 @@
 
       async function run() {
         if (!nonce) {
-          status.textContent = "Missing session id. Close this window and try again."
+          setError("Missing session id. Close this window and try again.")
           showClose()
           return
         }
@@ -115,13 +294,13 @@
         if (error) {
           const message = error_description || error
           await store({ error: message })
-          status.textContent = "Sign-in failed: " + message
+          setError(message)
           closeSoon(1500)
           return
         }
 
         if (!access_token) {
-          status.textContent = "No token received. You can close this window."
+          setError("No token received. You can close this window.")
           showClose()
           return
         }
@@ -132,14 +311,13 @@
         })
 
         if (!ok) {
-          status.textContent =
-            "We couldn't hand your sign-in back to the plugin. Close this window and try again."
+          setError("We couldn't hand your sign-in back to the plugin. Close this window and try again.")
           showClose()
           return
         }
 
-        status.textContent = "You're signed in. You can close this window."
-        closeSoon(400)
+        setSuccess("You can close this window and return to the plugin.")
+        closeSoon(600)
       }
 
       run()
